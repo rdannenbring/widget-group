@@ -4,6 +4,12 @@ A [DankMaterialShell](https://github.com/AvengeMedia/DankMaterialShell) (DMS) ba
 
 > Status: **beta** (v0.5.0)
 
+## Screenshots
+
+![Widget Group expanded on the bar](assets/screenshot.png)
+
+![Settings](assets/settings.png)
+
 ## Why
 
 Bars get crowded. Widget Group lets you fold a cluster of widgets behind one button and reveal them on demand. Because the members render **inline in the bar window** (not in a separate popout), each member's own popout positions correctly below the bar — exactly as if it were placed directly on the bar.

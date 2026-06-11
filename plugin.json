@@ -5,9 +5,12 @@
   "version": "0.5.0",
   "author": "rdannenbring",
   "type": "widget",
+  "category": "utilities",
   "capabilities": ["dankbar-widget"],
   "icon": "widgets",
   "component": "./GroupWidget.qml",
   "settings": "./GroupSettings.qml",
+  "repo": "https://github.com/rdannenbring/widget-group",
+  "screenshot": "https://raw.githubusercontent.com/rdannenbring/widget-group/main/assets/screenshot.png",
   "permissions": ["settings_read", "settings_write"]
 }
