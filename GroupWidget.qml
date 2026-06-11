@@ -1,0 +1,262 @@
+import QtQuick
+import qs.Common
+import qs.Widgets
+import qs.Modules.Plugins
+
+// A collapsible group: one toggle button on the bar that expands to reveal a row
+// of real, live widgets (each a target plugin's pill + working popout). Members
+// render inline in the bar window, so their popouts position below the bar
+// correctly — the whole reason this works where a dropdown panel didn't.
+PluginComponent {
+    id: root
+
+    property string variantId: ""
+    property var variantData: null
+    property var popoutService: null
+
+    property bool expanded: false
+
+    Connections {
+        target: pluginService
+        function onPluginDataChanged(changedId) {
+            if (changedId !== root.pluginId || root.variantId === "") return
+            const fresh = pluginService.getPluginVariantData(root.pluginId, root.variantId)
+            if (fresh) root.variantData = fresh
+        }
+    }
+
+    readonly property var targets: variantData?.targets ?? []
+    readonly property string groupIcon: variantData?.icon || "widgets"
+    readonly property string groupLabel: variantData?.label || ""
+    readonly property string groupDisplay: variantData?.display || "both"
+    readonly property string expandDir: variantData?.expandDir || "right"
+
+    readonly property bool showIcon:  groupDisplay !== "text"
+    readonly property bool showLabel: groupDisplay !== "icon" && groupLabel !== ""
+
+    // expandDir is one value covering both orientations: left/right (horizontal
+    // bars) and up/down (vertical bars). Each pill uses the relevant pair and
+    // falls back to a sane default for the other orientation's values.
+    readonly property bool hLeft: expandDir === "left"
+    readonly property bool vUp:   expandDir === "up"
+
+    // Auto-collapse behaviour
+    readonly property bool autoCollapse: variantData?.autoCollapse === true
+    readonly property int autoCollapseSeconds: {
+        const s = variantData?.autoCollapseSeconds
+        return (s && s >= 1) ? s : 5
+    }
+    readonly property bool autoCollapseOnLeave: variantData?.autoCollapseOnLeave === true
+    property bool hovered: false
+
+    Timer {
+        id: collapseTimer
+        interval: root.autoCollapseSeconds * 1000
+        repeat: false
+        // When "on leave" is set, only count down while the mouse is away from the
+        // expanded group (re-entering resets it); otherwise count from expand.
+        running: root.expanded && root.autoCollapse
+                 && (root.autoCollapseOnLeave ? !root.hovered : true)
+        onTriggered: root.expanded = false
+    }
+
+    // ── Horizontal bar pill ──────────────────────────────────────────────────
+    horizontalBarPill: Component {
+        Row {
+            id: hRow
+            spacing: Theme.spacingXS
+            layoutDirection: root.hLeft ? Qt.RightToLeft : Qt.LeftToRight
+
+            HoverHandler { onHoveredChanged: root.hovered = hovered }
+
+            // Toggle button
+            Rectangle {
+                id: hToggle
+                width: hToggleRow.implicitWidth + Theme.spacingS * 2
+                height: hToggleRow.implicitHeight + Theme.spacingXS * 2
+                radius: Theme.cornerRadius
+                color: hToggleArea.containsMouse ? Theme.surfaceContainerHigh : "transparent"
+                anchors.verticalCenter: parent.verticalCenter
+
+                Row {
+                    id: hToggleRow
+                    anchors.centerIn: parent
+                    spacing: Theme.spacingXS
+                    DankIcon {
+                        visible: root.showIcon
+                        name: root.groupIcon
+                        size: root.iconSize
+                        color: Theme.surfaceText
+                        anchors.verticalCenter: parent.verticalCenter
+                    }
+                    StyledText {
+                        visible: root.showLabel
+                        text: root.groupLabel
+                        font.pixelSize: Theme.fontSizeMedium
+                        font.weight: Font.Medium
+                        color: Theme.surfaceText
+                        anchors.verticalCenter: parent.verticalCenter
+                    }
+                    DankIcon {
+                        name: root.hLeft
+                            ? (root.expanded ? "chevron_right" : "chevron_left")
+                            : (root.expanded ? "chevron_left" : "chevron_right")
+                        size: root.iconSize - 8
+                        color: Theme.surfaceVariantText
+                        anchors.verticalCenter: parent.verticalCenter
+                    }
+                }
+
+                MouseArea {
+                    id: hToggleArea
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: root.expanded = !root.expanded
+                }
+            }
+
+            Repeater {
+                model: root.targets
+
+                delegate: Item {
+                    id: hWrap
+                    required property var modelData
+                    height: hMember.implicitHeight
+                    width: root.expanded ? hMember.implicitWidth : 0
+                    clip: true
+                    opacity: root.expanded ? 1 : 0
+                    anchors.verticalCenter: parent.verticalCenter
+
+                    Behavior on width   { NumberAnimation { duration: Theme.shortDuration; easing.type: Theme.standardEasing } }
+                    Behavior on opacity { NumberAnimation { duration: Theme.shortDuration } }
+
+                    GroupMember {
+                        id: hMember
+                        anchors.verticalCenter: parent.verticalCenter
+                        targetId: hWrap.modelData
+                        pluginService: root.pluginService
+                        popoutService: root.popoutService
+                        axis: root.axis
+                        section: root.section
+                        parentScreen: root.parentScreen
+                        widgetThickness: root.widgetThickness
+                        barThickness: root.barThickness
+                        barSpacing: root.barSpacing
+                        barConfig: root.barConfig
+                        blurBarWindow: root.blurBarWindow
+                    }
+                }
+            }
+        }
+    }
+
+    // ── Vertical bar pill ────────────────────────────────────────────────────
+    // Members render above the toggle when "up", below it when "down".
+    Component {
+        id: vMembersComp
+        Column {
+            spacing: Theme.spacingXS
+            Repeater {
+                model: root.targets
+                delegate: Item {
+                    id: vWrap
+                    required property var modelData
+                    width: vMember.implicitWidth
+                    height: root.expanded ? vMember.implicitHeight : 0
+                    clip: true
+                    opacity: root.expanded ? 1 : 0
+                    anchors.horizontalCenter: parent.horizontalCenter
+
+                    Behavior on height  { NumberAnimation { duration: Theme.shortDuration; easing.type: Theme.standardEasing } }
+                    Behavior on opacity { NumberAnimation { duration: Theme.shortDuration } }
+
+                    GroupMember {
+                        id: vMember
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        targetId: vWrap.modelData
+                        pluginService: root.pluginService
+                        popoutService: root.popoutService
+                        axis: root.axis
+                        section: root.section
+                        parentScreen: root.parentScreen
+                        widgetThickness: root.widgetThickness
+                        barThickness: root.barThickness
+                        barSpacing: root.barSpacing
+                        barConfig: root.barConfig
+                        blurBarWindow: root.blurBarWindow
+                    }
+                }
+            }
+        }
+    }
+
+    verticalBarPill: Component {
+        Column {
+            id: vCol
+            spacing: Theme.spacingXS
+
+            HoverHandler { onHoveredChanged: root.hovered = hovered }
+
+            // Members above the toggle (when expanding up)
+            Loader {
+                active: root.vUp
+                sourceComponent: vMembersComp
+                anchors.horizontalCenter: parent.horizontalCenter
+            }
+
+            Rectangle {
+                id: vToggle
+                width: vToggleCol.implicitWidth + Theme.spacingXS * 2
+                height: vToggleCol.implicitHeight + Theme.spacingS * 2
+                radius: Theme.cornerRadius
+                color: vToggleArea.containsMouse ? Theme.surfaceContainerHigh : "transparent"
+                anchors.horizontalCenter: parent.horizontalCenter
+
+                Column {
+                    id: vToggleCol
+                    anchors.centerIn: parent
+                    spacing: 1
+                    DankIcon {
+                        visible: root.showIcon
+                        name: root.groupIcon
+                        size: root.iconSize
+                        color: Theme.surfaceText
+                        anchors.horizontalCenter: parent.horizontalCenter
+                    }
+                    StyledText {
+                        visible: root.showLabel
+                        text: root.groupLabel
+                        font.pixelSize: Theme.fontSizeSmall
+                        font.weight: Font.Medium
+                        color: Theme.surfaceText
+                        anchors.horizontalCenter: parent.horizontalCenter
+                    }
+                    DankIcon {
+                        name: root.vUp
+                            ? (root.expanded ? "expand_more" : "expand_less")
+                            : (root.expanded ? "expand_less" : "expand_more")
+                        size: root.iconSize - 8
+                        color: Theme.surfaceVariantText
+                        anchors.horizontalCenter: parent.horizontalCenter
+                    }
+                }
+
+                MouseArea {
+                    id: vToggleArea
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: root.expanded = !root.expanded
+                }
+            }
+
+            // Members below the toggle (when expanding down)
+            Loader {
+                active: !root.vUp
+                sourceComponent: vMembersComp
+                anchors.horizontalCenter: parent.horizontalCenter
+            }
+        }
+    }
+}

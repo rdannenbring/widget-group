@@ -1,0 +1,765 @@
+import QtQuick
+import QtQuick.Controls
+import qs.Common
+import qs.Services
+import qs.Widgets
+import qs.Modules.Plugins
+
+PluginSettings {
+    id: root
+    pluginId: "widgetGroup"
+
+    property string newGroupName: ""
+    property string newGroupIcon: "widgets"
+
+    property string editingGroupId: ""
+    property var editingGroup: null
+    property string newMemberId: ""
+    property int editingMemberIndex: -1
+    property string editDisplay: "both"      // both | icon | text
+    property string editExpandDir: "right"   // right | left
+    property bool editAutoCollapse: false
+    property int editAutoCollapseSeconds: 5
+    property bool editAutoCollapseOnLeave: false
+
+    onVariantsChanged: {
+        localGroups.clear()
+        for (let i = 0; i < variants.length; i++) {
+            const v = variants[i]
+            localGroups.append({
+                vid: v.id || "",
+                vname: v.name || "",
+                vicon: v.icon || "widgets",
+                vcount: (v.targets ? v.targets.length : 0)
+            })
+        }
+        if (editingGroupId !== "") {
+            editingGroup = variants.find(v => v.id === editingGroupId) || null
+            _syncMembers()
+        }
+    }
+
+    ListModel { id: localGroups }
+    ListModel { id: localMembers }
+
+    function _syncMembers() {
+        localMembers.clear()
+        const t = editingGroup?.targets ?? []
+        for (let i = 0; i < t.length; i++)
+            localMembers.append({ mid: t[i] })
+    }
+
+    function _currentMembers() {
+        const out = []
+        for (let i = 0; i < localMembers.count; i++)
+            out.push(localMembers.get(i).mid)
+        return out
+    }
+
+    function _editMember(index) {
+        const r = localMembers.get(index)
+        if (!r) return
+        editingMemberIndex = index
+        newMemberId = r.mid
+        memberPicker.currentValue = _nameFor(r.mid)
+    }
+
+    function _cancelMemberEdit() {
+        editingMemberIndex = -1
+        newMemberId = ""
+        memberPicker.currentValue = ""
+    }
+
+    function _saveMembers(arr) {
+        if (!editingGroupId || !pluginService) return
+        updateVariant(editingGroupId, { targets: arr })
+        editingGroup = Object.assign({}, editingGroup, { targets: arr })
+        _syncMembers()
+        for (let i = 0; i < localGroups.count; i++) {
+            if (localGroups.get(i).vid === editingGroupId) {
+                localGroups.setProperty(i, "vcount", arr.length)
+                break
+            }
+        }
+    }
+
+    function _selectGroup(v) {
+        editingGroupId = v.id
+        editingGroup = v
+        editNameField.text = v.name || ""
+        editLabelField.text = v.label || ""
+        editIconField.currentIcon = v.icon || "widgets"
+        editDisplay = v.display || "both"
+        editExpandDir = v.expandDir || "right"
+        editAutoCollapse = v.autoCollapse === true
+        editAutoCollapseSeconds = (v.autoCollapseSeconds && v.autoCollapseSeconds >= 1) ? v.autoCollapseSeconds : 5
+        editAutoCollapseOnLeave = v.autoCollapseOnLeave === true
+        newMemberId = ""
+        editingMemberIndex = -1
+        memberPicker.currentValue = ""
+        _syncMembers()
+    }
+
+    function _saveGroupMeta() {
+        if (!editingGroupId || !pluginService) return
+        const nm = editNameField.text.trim()
+        if (!nm) return
+        const cfg = {
+            name: nm,
+            label: editLabelField.text.trim(),
+            icon: editIconField.currentIcon || "widgets",
+            display: editDisplay,
+            expandDir: editExpandDir,
+            autoCollapse: editAutoCollapse,
+            autoCollapseSeconds: editAutoCollapseSeconds,
+            autoCollapseOnLeave: editAutoCollapseOnLeave
+        }
+        updateVariant(editingGroupId, cfg)
+        editingGroup = Object.assign({}, editingGroup, cfg)
+        for (let i = 0; i < localGroups.count; i++) {
+            if (localGroups.get(i).vid === editingGroupId) {
+                localGroups.setProperty(i, "vname", nm)
+                localGroups.setProperty(i, "vicon", cfg.icon)
+                break
+            }
+        }
+    }
+
+    function _saveDisplay(v) { editDisplay = v; _saveGroupMeta() }
+    function _saveDir(v) { editExpandDir = v; _saveGroupMeta() }
+    function _saveAutoCollapse(v) { editAutoCollapse = v; _saveGroupMeta() }
+    function _saveAutoCollapseOnLeave(v) { editAutoCollapseOnLeave = v; _saveGroupMeta() }
+    function _saveAutoCollapseSeconds(v) { editAutoCollapseSeconds = v; _saveGroupMeta() }
+
+    readonly property var availableTargets: {
+        if (!pluginService) return []
+        return pluginService.availablePluginsList
+            .filter(p => p.id !== "widgetGroup"
+                      && (p.type === "widget" || (pluginService.pluginWidgetComponents && pluginService.pluginWidgetComponents[p.id])))
+            .map(p => ({ id: p.id, name: p.name }))
+    }
+    readonly property var availableTargetNames: availableTargets.map(p => p.name)
+
+    function _nameFor(id) {
+        const t = availableTargets.find(p => p.id === id)
+        return t ? t.name : id
+    }
+
+    // ── Header ─────────────────────────────────────────────────────────────────
+    StyledText {
+        width: parent.width
+        text: "Widget Groups"
+        font.pixelSize: Theme.fontSizeLarge
+        font.weight: Font.Bold
+        color: Theme.surfaceText
+    }
+
+    StyledText {
+        width: parent.width
+        text: "One bar button that expands to reveal several widgets inline — each keeps its own live pill and popout."
+        font.pixelSize: Theme.fontSizeSmall
+        color: Theme.surfaceVariantText
+        wrapMode: Text.WordWrap
+    }
+
+    // Usage hint
+    StyledRect {
+        width: parent.width
+        height: hintColumn.implicitHeight + Theme.spacingL * 2
+        radius: Theme.cornerRadius
+        color: Theme.surface
+
+        Column {
+            id: hintColumn
+            anchors.fill: parent
+            anchors.margins: Theme.spacingL
+            spacing: Theme.spacingS
+
+            Row {
+                spacing: Theme.spacingS
+                DankIcon { name: "info"; size: Theme.iconSize; color: Theme.primary; anchors.verticalCenter: parent.verticalCenter }
+                StyledText {
+                    text: "How to use"
+                    font.pixelSize: Theme.fontSizeMedium
+                    font.weight: Font.Medium
+                    color: Theme.surfaceText
+                    anchors.verticalCenter: parent.verticalCenter
+                }
+            }
+
+            StyledText {
+                width: parent.width
+                text: "1. Enable the widget plugins you want to group\n2. Create a group above, then click it to edit (click again to collapse)\n3. Set the button icon, label, and what it shows (icon/text/both)\n4. Choose which way members expand — left/right on horizontal bars, up/down on vertical\n5. Add member widgets; click a member to change its plugin, use the arrows to reorder, or ✕ to remove\n6. Go to Bar Settings → Add Widget to place the group on your bar\n\nOn the bar, click the button (▾/▴ or ‹/›) to show or hide the members."
+                font.pixelSize: Theme.fontSizeSmall
+                color: Theme.surfaceVariantText
+                wrapMode: Text.WordWrap
+                lineHeight: 1.5
+            }
+        }
+    }
+
+    // ── Create group ───────────────────────────────────────────────────────────
+    StyledRect {
+        width: parent.width
+        height: addCol.implicitHeight + Theme.spacingL * 2
+        radius: Theme.cornerRadius
+        color: Theme.surfaceContainerHigh
+
+        Column {
+            id: addCol
+            anchors.fill: parent
+            anchors.margins: Theme.spacingL
+            spacing: Theme.spacingM
+
+            StyledText {
+                text: "Add Group"
+                font.pixelSize: Theme.fontSizeMedium
+                font.weight: Font.Medium
+                color: Theme.surfaceText
+            }
+
+            Row {
+                width: parent.width
+                spacing: Theme.spacingM
+
+                Column {
+                    width: (parent.width - Theme.spacingM) / 2
+                    spacing: Theme.spacingXS
+                    StyledText { text: "Name"; font.pixelSize: Theme.fontSizeSmall; color: Theme.surfaceVariantText }
+                    DankTextField {
+                        id: nameField
+                        width: parent.width
+                        placeholderText: "e.g. System"
+                        onTextChanged: root.newGroupName = text
+                    }
+                }
+
+                Column {
+                    width: (parent.width - Theme.spacingM) / 2
+                    spacing: Theme.spacingXS
+                    StyledText { text: "Button icon"; font.pixelSize: Theme.fontSizeSmall; color: Theme.surfaceVariantText }
+                    DropdownIconPicker {
+                        id: iconField
+                        width: parent.width
+                        currentIcon: "widgets"
+                        onIconSelected: (name) => root.newGroupIcon = name
+                    }
+                }
+            }
+
+            DankButton {
+                text: "Create Group"
+                iconName: "add"
+                onClicked: {
+                    if (!root.newGroupName) {
+                        ToastService.showError("Please enter a name")
+                        return
+                    }
+                    const newId = createVariant(root.newGroupName, {
+                        icon: root.newGroupIcon || "widgets",
+                        label: "", display: "both", expandDir: "right", targets: []
+                    })
+                    if (newId) {
+                        Qt.callLater(() => pluginService.reloadPlugin("widgetGroup"))
+                        ToastService.showInfo("Group created: " + root.newGroupName)
+                        root.newGroupName = ""
+                        root.newGroupIcon = "widgets"
+                        nameField.text = ""
+                        iconField.currentIcon = "widgets"
+                    } else {
+                        ToastService.showError("Failed to save — plugin service unavailable")
+                    }
+                }
+            }
+        }
+    }
+
+    // ── Existing groups ─────────────────────────────────────────────────────────
+    StyledRect {
+        width: parent.width
+        height: Math.max(80, groupsCol.implicitHeight + Theme.spacingL * 2)
+        radius: Theme.cornerRadius
+        color: Theme.surfaceContainerHigh
+
+        Column {
+            id: groupsCol
+            anchors.fill: parent
+            anchors.margins: Theme.spacingL
+            spacing: Theme.spacingS
+
+            StyledText {
+                text: "Your Groups"
+                font.pixelSize: Theme.fontSizeMedium
+                font.weight: Font.Medium
+                color: Theme.surfaceText
+            }
+
+            StyledText {
+                visible: localGroups.count === 0
+                width: parent.width
+                text: "No groups yet. Create one above."
+                font.pixelSize: Theme.fontSizeSmall
+                color: Theme.surfaceVariantText
+            }
+
+            Repeater {
+                model: localGroups
+
+                delegate: StyledRect {
+                    required property string vid
+                    required property string vname
+                    required property string vicon
+                    required property int vcount
+                    required property int index
+
+                    width: groupsCol.width
+                    height: gRow.implicitHeight + Theme.spacingM * 2
+                    radius: Theme.cornerRadius
+                    color: root.editingGroupId === vid
+                        ? Theme.primaryContainer
+                        : (gHover.containsMouse ? Theme.surfaceContainerHighest : Theme.surfaceContainer)
+
+                    Behavior on color { ColorAnimation { duration: Theme.shortDuration } }
+
+                    MouseArea {
+                        id: gHover
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: {
+                            // Second click on the same row collapses the editor
+                            if (root.editingGroupId === vid) {
+                                root.editingGroupId = ""
+                                root.editingGroup = null
+                                return
+                            }
+                            const fresh = variants.find(v => v.id === vid) || null
+                            if (fresh) root._selectGroup(fresh)
+                        }
+                    }
+
+                    Row {
+                        id: gRow
+                        anchors.left: parent.left
+                        anchors.right: gDel.left
+                        anchors.top: parent.top
+                        anchors.bottom: parent.bottom
+                        anchors.leftMargin: Theme.spacingM
+                        anchors.rightMargin: Theme.spacingS
+                        spacing: Theme.spacingM
+
+                        DankIcon {
+                            name: vicon || "widgets"
+                            size: Theme.iconSize
+                            color: root.editingGroupId === vid ? Theme.onPrimaryContainer : Theme.surfaceText
+                            anchors.verticalCenter: parent.verticalCenter
+                        }
+
+                        Column {
+                            anchors.verticalCenter: parent.verticalCenter
+                            spacing: 2
+                            width: parent.width - Theme.iconSize - Theme.spacingM
+
+                            StyledText {
+                                text: vname || "Unnamed"
+                                font.pixelSize: Theme.fontSizeMedium
+                                font.weight: Font.Medium
+                                color: root.editingGroupId === vid ? Theme.onPrimaryContainer : Theme.surfaceText
+                                elide: Text.ElideRight
+                                width: parent.width
+                            }
+
+                            StyledText {
+                                text: vcount + " widget" + (vcount === 1 ? "" : "s")
+                                font.pixelSize: Theme.fontSizeSmall
+                                color: root.editingGroupId === vid ? Theme.onPrimaryContainer : Theme.surfaceVariantText
+                                width: parent.width
+                            }
+                        }
+                    }
+
+                    Rectangle {
+                        id: gDel
+                        z: 1
+                        width: 32; height: 32; radius: 16
+                        anchors.right: parent.right
+                        anchors.rightMargin: Theme.spacingM
+                        anchors.verticalCenter: parent.verticalCenter
+                        color: gDelArea.containsMouse ? Theme.error : "transparent"
+
+                        DankIcon {
+                            anchors.centerIn: parent
+                            name: "delete"; size: 16
+                            color: gDelArea.containsMouse ? Theme.onError : Theme.surfaceVariantText
+                        }
+
+                        MouseArea {
+                            id: gDelArea
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: {
+                                if (root.editingGroupId === vid) {
+                                    root.editingGroupId = ""
+                                    root.editingGroup = null
+                                }
+                                removeVariant(vid)
+                                Qt.callLater(() => pluginService.reloadPlugin("widgetGroup"))
+                                ToastService.showInfo("Group removed")
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // ── Edit selected group ─────────────────────────────────────────────────────
+    StyledRect {
+        width: parent.width
+        height: editCol.implicitHeight + Theme.spacingL * 2
+        radius: Theme.cornerRadius
+        color: Theme.surfaceContainerHigh
+        visible: root.editingGroupId !== ""
+
+        Column {
+            id: editCol
+            anchors.fill: parent
+            anchors.margins: Theme.spacingL
+            spacing: Theme.spacingM
+
+            StyledText {
+                text: "Group Settings"
+                font.pixelSize: Theme.fontSizeMedium
+                font.weight: Font.Medium
+                color: Theme.surfaceText
+            }
+
+            Row {
+                width: parent.width
+                spacing: Theme.spacingM
+
+                Column {
+                    width: (parent.width - Theme.spacingM) / 2
+                    spacing: Theme.spacingXS
+                    StyledText { text: "Name"; font.pixelSize: Theme.fontSizeSmall; color: Theme.surfaceVariantText }
+                    DankTextField {
+                        id: editNameField
+                        width: parent.width
+                        placeholderText: "Group name"
+                        onEditingFinished: root._saveGroupMeta()
+                    }
+                }
+
+                Column {
+                    width: (parent.width - Theme.spacingM) / 2
+                    spacing: Theme.spacingXS
+                    StyledText { text: "Button icon"; font.pixelSize: Theme.fontSizeSmall; color: Theme.surfaceVariantText }
+                    DropdownIconPicker {
+                        id: editIconField
+                        width: parent.width
+                        onIconSelected: (name) => root._saveGroupMeta()
+                    }
+                }
+            }
+
+            Column {
+                width: parent.width
+                spacing: Theme.spacingXS
+                StyledText { text: "Button label (optional)"; font.pixelSize: Theme.fontSizeSmall; color: Theme.surfaceVariantText }
+                DankTextField {
+                    id: editLabelField
+                    width: parent.width
+                    placeholderText: "Text shown on the button"
+                    onEditingFinished: root._saveGroupMeta()
+                }
+            }
+
+            Row {
+                width: parent.width
+                spacing: Theme.spacingL
+
+                Column {
+                    spacing: Theme.spacingXS
+                    StyledText { text: "Button shows"; font.pixelSize: Theme.fontSizeSmall; color: Theme.surfaceVariantText }
+                    Row {
+                        spacing: Theme.spacingS
+                        Repeater {
+                            model: [
+                                { value: "both", label: "Icon & Text" },
+                                { value: "icon", label: "Icon only"  },
+                                { value: "text", label: "Text only"  }
+                            ]
+                            delegate: DankButton {
+                                required property var modelData
+                                text: modelData.label
+                                buttonHeight: 32
+                                backgroundColor: root.editDisplay === modelData.value ? Theme.primary : Theme.surfaceContainerHigh
+                                textColor: root.editDisplay === modelData.value ? Theme.onPrimary : Theme.surfaceText
+                                onClicked: root._saveDisplay(modelData.value)
+                            }
+                        }
+                    }
+                }
+            }
+
+            Column {
+                width: parent.width
+                spacing: Theme.spacingXS
+
+                StyledText { text: "Members appear (left/right for horizontal bars, up/down for vertical)"; font.pixelSize: Theme.fontSizeSmall; color: Theme.surfaceVariantText; width: parent.width; wrapMode: Text.WordWrap }
+                Flow {
+                    width: parent.width
+                    spacing: Theme.spacingS
+                    Repeater {
+                            model: [
+                                { value: "right", label: "Right", icon: "chevron_right" },
+                                { value: "left",  label: "Left",  icon: "chevron_left" },
+                                { value: "down",  label: "Down",  icon: "keyboard_arrow_down" },
+                                { value: "up",    label: "Up",    icon: "keyboard_arrow_up" }
+                            ]
+                            delegate: DankButton {
+                                required property var modelData
+                                text: modelData.label
+                                iconName: modelData.icon
+                                buttonHeight: 32
+                                backgroundColor: root.editExpandDir === modelData.value ? Theme.primary : Theme.surfaceContainerHigh
+                                textColor: root.editExpandDir === modelData.value ? Theme.onPrimary : Theme.surfaceText
+                                onClicked: root._saveDir(modelData.value)
+                            }
+                        }
+                    }
+                }
+
+            Rectangle { width: parent.width; height: 1; color: Theme.outlineVariant; opacity: 0.5 }
+
+            // Auto-collapse behaviour
+            DankToggle {
+                width: parent.width
+                text: "Auto-collapse"
+                description: "Collapse the group automatically after it has been expanded"
+                checked: root.editAutoCollapse
+                onToggled: (checked) => root._saveAutoCollapse(checked)
+            }
+
+            Column {
+                width: parent.width
+                spacing: Theme.spacingS
+                visible: root.editAutoCollapse
+
+                StyledText {
+                    text: "Stay open for " + root.editAutoCollapseSeconds + " second" + (root.editAutoCollapseSeconds === 1 ? "" : "s")
+                    font.pixelSize: Theme.fontSizeSmall
+                    color: Theme.surfaceVariantText
+                }
+
+                DankSlider {
+                    width: parent.width
+                    minimum: 1
+                    maximum: 30
+                    step: 1
+                    unit: "s"
+                    value: root.editAutoCollapseSeconds
+                    onSliderValueChanged: (newValue) => root.editAutoCollapseSeconds = newValue
+                    onSliderDragFinished: (finalValue) => root._saveAutoCollapseSeconds(finalValue)
+                }
+
+                DankToggle {
+                    width: parent.width
+                    text: "Only start the timer after the mouse leaves"
+                    description: "The countdown pauses while you're hovering the expanded group, and (re)starts when you move away"
+                    checked: root.editAutoCollapseOnLeave
+                    onToggled: (checked) => root._saveAutoCollapseOnLeave(checked)
+                }
+            }
+
+            Rectangle { width: parent.width; height: 1; color: Theme.outlineVariant; opacity: 0.5 }
+
+            StyledText {
+                text: "Member widgets (order shown when expanded)"
+                font.pixelSize: Theme.fontSizeSmall
+                font.weight: Font.Medium
+                color: Theme.surfaceVariantText
+            }
+
+            StyledText {
+                visible: localMembers.count === 0
+                text: "No widgets yet. Add some below."
+                font.pixelSize: Theme.fontSizeSmall
+                color: Theme.surfaceVariantText
+            }
+
+            Repeater {
+                model: localMembers
+
+                delegate: StyledRect {
+                    required property string mid
+                    required property int index
+
+                    width: editCol.width
+                    height: mRow.implicitHeight + Theme.spacingS * 2
+                    radius: Theme.cornerRadius
+                    color: root.editingMemberIndex === index
+                        ? Theme.primaryContainer
+                        : (editMemberArea.containsMouse ? Theme.surfaceContainerHighest : Theme.surfaceContainer)
+
+                    Behavior on color { ColorAnimation { duration: Theme.shortDuration } }
+
+                    // Click the row (outside the reorder/remove buttons) to change its plugin
+                    MouseArea {
+                        id: editMemberArea
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: root._editMember(index)
+                    }
+
+                    Row {
+                        id: mRow
+                        anchors.fill: parent
+                        anchors.margins: Theme.spacingS
+                        spacing: Theme.spacingS
+
+                        // reorder
+                        Column {
+                            spacing: 2
+                            anchors.verticalCenter: parent.verticalCenter
+
+                            Rectangle {
+                                width: 24; height: 24; radius: 4
+                                color: upArea.containsMouse ? Theme.surfaceContainerHighest : "transparent"
+                                visible: index > 0
+                                DankIcon { anchors.centerIn: parent; name: "keyboard_arrow_up"; size: 16; color: Theme.surfaceText }
+                                MouseArea {
+                                    id: upArea; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+                                    onClicked: {
+                                        const a = root._currentMembers()
+                                        const t = a[index - 1]; a[index - 1] = a[index]; a[index] = t
+                                        root._saveMembers(a)
+                                    }
+                                }
+                            }
+                            Rectangle {
+                                width: 24; height: 24; radius: 4
+                                color: downArea.containsMouse ? Theme.surfaceContainerHighest : "transparent"
+                                visible: index < localMembers.count - 1
+                                DankIcon { anchors.centerIn: parent; name: "keyboard_arrow_down"; size: 16; color: Theme.surfaceText }
+                                MouseArea {
+                                    id: downArea; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+                                    onClicked: {
+                                        const a = root._currentMembers()
+                                        const t = a[index + 1]; a[index + 1] = a[index]; a[index] = t
+                                        root._saveMembers(a)
+                                    }
+                                }
+                            }
+                        }
+
+                        DankIcon {
+                            name: (pluginService && pluginService.availablePlugins[mid])
+                                ? (pluginService.availablePlugins[mid].icon || "extension") : "extension"
+                            size: Theme.iconSize - 4
+                            color: Theme.surfaceText
+                            anchors.verticalCenter: parent.verticalCenter
+                        }
+
+                        Column {
+                            anchors.verticalCenter: parent.verticalCenter
+                            spacing: 2
+                            width: parent.width - 60 - Theme.iconSize - mDel.width - Theme.spacingS * 5
+
+                            StyledText {
+                                text: root._nameFor(mid)
+                                font.pixelSize: Theme.fontSizeMedium
+                                color: Theme.surfaceText
+                                elide: Text.ElideRight
+                                width: parent.width
+                            }
+                            StyledText {
+                                visible: !(pluginService && pluginService.availablePlugins[mid]?.loaded)
+                                text: "not enabled"
+                                font.pixelSize: Theme.fontSizeSmall
+                                color: Theme.error
+                            }
+                        }
+
+                        Rectangle {
+                            id: mDel
+                            width: 32; height: 32; radius: 16
+                            color: mDelArea.containsMouse ? Theme.error : "transparent"
+                            anchors.verticalCenter: parent.verticalCenter
+                            DankIcon { anchors.centerIn: parent; name: "close"; size: 14; color: mDelArea.containsMouse ? Theme.onError : Theme.surfaceVariantText }
+                            MouseArea {
+                                id: mDelArea; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+                                onClicked: {
+                                    const a = root._currentMembers()
+                                    a.splice(index, 1)
+                                    root._saveMembers(a)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            Rectangle { width: parent.width; height: 1; color: Theme.outlineVariant; opacity: 0.3 }
+
+            StyledText {
+                text: root.editingMemberIndex >= 0 ? "Change this widget" : "Add a widget"
+                font.pixelSize: Theme.fontSizeSmall
+                font.weight: Font.Medium
+                color: root.editingMemberIndex >= 0 ? Theme.primary : Theme.surfaceVariantText
+            }
+
+            Row {
+                width: parent.width
+                spacing: Theme.spacingM
+
+                DankDropdown {
+                    id: memberPicker
+                    width: parent.width - addMemberBtn.width - (cancelMemberBtn.visible ? cancelMemberBtn.width + Theme.spacingM : 0) - Theme.spacingM
+                    emptyText: "Select a widget plugin…"
+                    options: root.availableTargetNames
+                    onValueChanged: (value) => {
+                        const idx = root.availableTargetNames.indexOf(value)
+                        root.newMemberId = idx >= 0 ? root.availableTargets[idx].id : ""
+                    }
+                }
+
+                DankButton {
+                    id: addMemberBtn
+                    text: root.editingMemberIndex >= 0 ? "Update" : "Add"
+                    iconName: root.editingMemberIndex >= 0 ? "check" : "add"
+                    anchors.verticalCenter: parent.verticalCenter
+                    onClicked: {
+                        if (!root.newMemberId) {
+                            ToastService.showError("Pick a widget plugin")
+                            return
+                        }
+                        const a = root._currentMembers()
+                        const editing = root.editingMemberIndex >= 0 && root.editingMemberIndex < a.length
+                        if (editing)
+                            a[root.editingMemberIndex] = root.newMemberId
+                        else
+                            a.push(root.newMemberId)
+                        root._saveMembers(a)
+                        root.editingMemberIndex = -1
+                        root.newMemberId = ""
+                        memberPicker.currentValue = ""
+                        ToastService.showInfo(editing ? "Widget changed" : "Widget added")
+                    }
+                }
+
+                DankButton {
+                    id: cancelMemberBtn
+                    visible: root.editingMemberIndex >= 0
+                    text: "Cancel"
+                    backgroundColor: Theme.surfaceContainerHigh
+                    textColor: Theme.surfaceText
+                    anchors.verticalCenter: parent.verticalCenter
+                    onClicked: root._cancelMemberEdit()
+                }
+            }
+        }
+    }
+}
