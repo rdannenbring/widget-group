@@ -148,6 +148,29 @@ PluginComponent {
                     }
                 }
             }
+
+            // Group boundary marker — a chevron at the far end, mirroring the
+            // toggle's chevron and pointing back toward it, so the group's extent
+            // is clear and symmetric when expanded.
+            Item {
+                visible: root.targets.length > 0
+                width: root.expanded ? hCapIcon.implicitWidth : 0
+                height: hCapIcon.implicitHeight
+                opacity: root.expanded ? 1 : 0
+                anchors.verticalCenter: parent.verticalCenter
+                Behavior on width   { NumberAnimation { duration: Theme.shortDuration; easing.type: Theme.standardEasing } }
+                Behavior on opacity { NumberAnimation { duration: Theme.shortDuration } }
+
+                DankIcon {
+                    id: hCapIcon
+                    anchors.centerIn: parent
+                    // Pull toward the last widget to cancel the Row's inter-widget gap
+                    anchors.horizontalCenterOffset: root.hLeft ? Theme.spacingXS : -Theme.spacingXS
+                    name: root.hLeft ? "keyboard_double_arrow_right" : "keyboard_double_arrow_left"
+                    size: root.iconSize - 8
+                    color: Theme.surfaceVariantText
+                }
+            }
         }
     }
 
@@ -157,6 +180,26 @@ PluginComponent {
         id: vMembersComp
         Column {
             spacing: Theme.spacingXS
+
+            // Boundary marker at the top — far end when expanding upward
+            Item {
+                visible: root.targets.length > 0 && root.vUp
+                anchors.horizontalCenter: parent.horizontalCenter
+                width: vCapTopIcon.implicitWidth
+                height: root.expanded ? vCapTopIcon.implicitHeight : 0
+                opacity: root.expanded ? 1 : 0
+                Behavior on height  { NumberAnimation { duration: Theme.shortDuration; easing.type: Theme.standardEasing } }
+                Behavior on opacity { NumberAnimation { duration: Theme.shortDuration } }
+                DankIcon {
+                    id: vCapTopIcon
+                    anchors.centerIn: parent
+                    anchors.verticalCenterOffset: Theme.spacingXS
+                    name: "keyboard_double_arrow_down"
+                    size: root.iconSize - 8
+                    color: Theme.surfaceVariantText
+                }
+            }
+
             Repeater {
                 model: root.targets
                 delegate: Item {
@@ -186,6 +229,25 @@ PluginComponent {
                         barConfig: root.barConfig
                         blurBarWindow: root.blurBarWindow
                     }
+                }
+            }
+
+            // Boundary marker at the bottom — far end when expanding downward
+            Item {
+                visible: root.targets.length > 0 && !root.vUp
+                anchors.horizontalCenter: parent.horizontalCenter
+                width: vCapBotIcon.implicitWidth
+                height: root.expanded ? vCapBotIcon.implicitHeight : 0
+                opacity: root.expanded ? 1 : 0
+                Behavior on height  { NumberAnimation { duration: Theme.shortDuration; easing.type: Theme.standardEasing } }
+                Behavior on opacity { NumberAnimation { duration: Theme.shortDuration } }
+                DankIcon {
+                    id: vCapBotIcon
+                    anchors.centerIn: parent
+                    anchors.verticalCenterOffset: -Theme.spacingXS
+                    name: "keyboard_double_arrow_up"
+                    size: root.iconSize - 8
+                    color: Theme.surfaceVariantText
                 }
             }
         }

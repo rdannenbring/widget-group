@@ -189,7 +189,7 @@ PluginSettings {
 
             StyledText {
                 width: parent.width
-                text: "1. Enable the widget plugins you want to group\n2. Create a group above, then click it to edit (click again to collapse)\n3. Set the button icon, label, and what it shows (icon/text/both)\n4. Choose which way members expand — left/right on horizontal bars, up/down on vertical\n5. Add member widgets; click a member to change its plugin, use the arrows to reorder, or ✕ to remove\n6. Go to Bar Settings → Add Widget to place the group on your bar\n\nOn the bar, click the button (▾/▴ or ‹/›) to show or hide the members."
+                text: "1. Enable the widget plugins you want to group\n2. Create a group above, then click it to edit (click again to collapse)\n3. Set the button icon, label, and what it shows (icon/text/both)\n4. Choose which way members expand — left/right on horizontal bars, up/down on vertical\n5. Optionally set Auto-collapse to fold the group again after a delay\n6. Add member widgets; click a member to change its plugin, use the arrows to reorder, or ✕ to remove\n7. Go to Bar Settings → Add Widget to place the group on your bar\n\nOn the bar, click the button to show or hide the members. When expanded, a double-chevron marks the far end of the group."
                 font.pixelSize: Theme.fontSizeSmall
                 color: Theme.surfaceVariantText
                 wrapMode: Text.WordWrap
