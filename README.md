@@ -8,11 +8,11 @@ A [DankMaterialShell](https://github.com/AvengeMedia/DankMaterialShell) (DMS) ba
 
 Expanded — the group reveals its member widgets inline, with a double-chevron marking the end:
 
-![Widget Group expanded on the bar](assets/expanded.png)
+![Widget Group expanded on the bar](assets/group-expanded.png)
 
 Collapsed — folded back into a single button:
 
-![Widget Group collapsed to a button](assets/collapsed.png)
+![Widget Group collapsed to a button](assets/group-collapsed.png)
 
 ## Why
 

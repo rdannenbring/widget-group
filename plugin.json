@@ -11,6 +11,6 @@
   "component": "./GroupWidget.qml",
   "settings": "./GroupSettings.qml",
   "repo": "https://github.com/rdannenbring/widget-group",
-  "screenshot": "https://raw.githubusercontent.com/rdannenbring/widget-group/main/assets/expanded.png",
+  "screenshot": "https://raw.githubusercontent.com/rdannenbring/widget-group/main/assets/group-expanded.png",
   "permissions": ["settings_read", "settings_write"]
 }
