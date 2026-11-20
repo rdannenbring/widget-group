@@ -2,7 +2,7 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 import qs.Common
-import qs.Modules.DankBar.Widgets
+import qs.Modules.DBar.Widgets
 import qs.Services
 
 // Renders ONE target's real, live bar widget inline, with full bar context
